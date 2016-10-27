@@ -193,12 +193,16 @@ static int tagger_release(crfsuite_tagger_t* tagger)
 
 static int tagger_set(crfsuite_tagger_t* tagger, crfsuite_instance_t *inst)
 {
+    int i;
     crf1dt_t* crf1dt = (crf1dt_t*)tagger->internal;
     crf1d_context_t* ctx = crf1dt->ctx;
     crf1dc_set_num_items(ctx, inst->num_items);
     crf1dc_reset(crf1dt->ctx, RF_STATE);
     crf1dt_state_score(crf1dt, inst);
     crf1dt->level = LEVEL_SET;
+    for (i = 0;i < inst->num_items;++i) {
+        crfsuite_restricted_copy(&ctx->restricted_labels[i], &inst->restricted_labels[i]);
+    }
     return 0;
 }
 

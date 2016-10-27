@@ -85,8 +85,10 @@ error_exit:
 
 int crf1dc_set_num_items(crf1d_context_t* ctx, int T)
 {
+    int i;
     const int L = ctx->num_labels;
 
+    const int old_num_items = ctx->num_items;
     ctx->num_items = T;
 
     if (ctx->cap_items < T) {
@@ -98,6 +100,10 @@ int crf1dc_set_num_items(crf1d_context_t* ctx, int T)
         free(ctx->beta_score);
         free(ctx->alpha_score);
         free(ctx->state);
+        for (i = 0;i < old_num_items;++i) {
+            crfsuite_restricted_finish(&ctx->restricted_labels[i]);
+        }
+        free(ctx->restricted_labels);
 
         ctx->alpha_score = (floatval_t*)calloc(T * L, sizeof(floatval_t));
         if (ctx->alpha_score == NULL) return CRFSUITEERR_OUTOFMEMORY;
@@ -107,6 +113,8 @@ int crf1dc_set_num_items(crf1d_context_t* ctx, int T)
         if (ctx->scale_factor == NULL) return CRFSUITEERR_OUTOFMEMORY;
         ctx->row = (floatval_t*)calloc(L, sizeof(floatval_t));
         if (ctx->row == NULL) return CRFSUITEERR_OUTOFMEMORY;
+        ctx->restricted_labels = (crfsuite_restricted_t*)calloc(T, sizeof(crfsuite_restricted_t));
+        if (ctx->restricted_labels == NULL) return CRFSUITEERR_OUTOFMEMORY;
 
         if (ctx->flag & CTXF_VITERBI) {
             ctx->backward_edge = (int*)calloc(T * L, sizeof(int));
@@ -131,6 +139,7 @@ int crf1dc_set_num_items(crf1d_context_t* ctx, int T)
 
 void crf1dc_delete(crf1d_context_t* ctx)
 {
+    int i;
     if (ctx != NULL) {
         free(ctx->backward_edge);
         free(ctx->mexp_state);
@@ -143,6 +152,10 @@ void crf1dc_delete(crf1d_context_t* ctx)
         free(ctx->mexp_trans);
         _aligned_free(ctx->exp_trans);
         free(ctx->trans);
+        for (i = 0;i < ctx->num_items;++i) {
+            crfsuite_restricted_finish(&ctx->restricted_labels[i]);
+        }
+        free(ctx->restricted_labels);
     }
     free(ctx);
 }
@@ -465,12 +478,13 @@ floatval_t crf1dc_lognorm(crf1d_context_t* ctx)
 
 floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
 {
-    int i, j, t;
+    int i, j, i_tmp, j_tmp, t, l, L_size_i, L_size_j;
     int *back = NULL;
     floatval_t max_score, score, *cur = NULL;
     const floatval_t *prev = NULL, *state = NULL, *trans = NULL;
     const int T = ctx->num_items;
     const int L = ctx->num_labels;
+    crfsuite_restricted_t *restricted_labels = ctx->restricted_labels;
 
     /*
         This function assumes state and trans scores to be in the logarithm domain.
@@ -479,35 +493,74 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
     /* Compute the scores at (0, *). */
     cur = ALPHA_SCORE(ctx, 0);
     state = STATE_SCORE(ctx, 0);
-    for (j = 0;j < L;++j) {
-        cur[j] = state[j];
+
+    if (restricted_labels[0].num_labels == 0) {
+        L_size_j = L;
     }
+    else {
+        L_size_j = restricted_labels[0].num_labels;
+    }
+
+    for (j = 0;j < L_size_j;++j) {
+        if (restricted_labels[0].num_labels == 0) {
+            j_tmp = j;
+        }
+        else {
+            j_tmp = restricted_labels[0].labels[j];
+        }
+        cur[j_tmp] = state[j_tmp];
+    }
+
 
     /* Compute the scores at (t, *). */
     for (t = 1;t < T;++t) {
+        if (restricted_labels[t].num_labels == 0) {
+            L_size_j = L;
+        }
+        else {
+            L_size_j = restricted_labels[t].num_labels;
+        }
         prev = ALPHA_SCORE(ctx, t-1);
         cur = ALPHA_SCORE(ctx, t);
         state = STATE_SCORE(ctx, t);
         back = BACKWARD_EDGE_AT(ctx, t);
 
         /* Compute the score of (t, j). */
-        for (j = 0;j < L;++j) {
+        for (j = 0;j < L_size_j;++j) {
             max_score = -FLOAT_MAX;
+            if (restricted_labels[t].num_labels == 0) {
+                j_tmp = j;
+            }
+            else {
+                j_tmp = restricted_labels[t].labels[j];
+            }
 
-            for (i = 0;i < L;++i) {
+            if (restricted_labels[t-1].num_labels == 0) {
+                L_size_i = L;
+            }
+            else {
+                L_size_i = restricted_labels[t-1].num_labels;
+            }
+            for (i = 0;i < L_size_i;++i) {
+                if (restricted_labels[t-1].num_labels == 0) {
+                    i_tmp = i;
+                }
+                else {
+                    i_tmp = restricted_labels[t-1].labels[i];
+                }
                 /* Transit from (t-1, i) to (t, j). */
-                trans = TRANS_SCORE(ctx, i);
-                score = prev[i] + trans[j];
+                trans = TRANS_SCORE(ctx, i_tmp);
+                score = prev[i_tmp] + trans[j_tmp];
 
                 /* Store this path if it has the maximum score. */
                 if (max_score < score) {
                     max_score = score;
                     /* Backward link (#t, #j) -> (#t-1, #i). */
-                    back[j] = i;
+                    back[j_tmp] = i_tmp;
                 }
             }
             /* Add the state score on (t, j). */
-            cur[j] = max_score + state[j];
+            cur[j_tmp] = max_score + state[j_tmp];
         }
     }
 
@@ -516,13 +569,29 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
     prev = ALPHA_SCORE(ctx, T-1);
     /* Set a score for T-1 to be overwritten later. Just in case we don't
        end up with something beating -FLOAT_MAX. */
+
+    if (restricted_labels[T-1].num_labels == 0) {
+        L_size_i = L;
+    }
+    else {
+        L_size_i = restricted_labels[T-1].num_labels;
+    }
+
     labels[T-1] = 0;
-    for (i = 0;i < L;++i) {
-        if (max_score < prev[i]) {
-            max_score = prev[i];
-            labels[T-1] = i;        /* Tag the item #T. */
+    for (i = 0;i < L_size_i;++i) {
+        if (restricted_labels[T-1].num_labels == 0) {
+            i_tmp = i;
+        }
+        else {
+            i_tmp = restricted_labels[T-1].labels[i];
+        }
+
+        if (max_score < prev[i_tmp]) {
+            max_score = prev[i_tmp];
+            labels[T-1] = i_tmp;        /* Tag the item #T. */
         }
     }
+
 
     /* Tag labels by tracing the backward links. */
     for (t = T-2;0 <= t;--t) {
