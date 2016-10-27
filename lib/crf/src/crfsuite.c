@@ -102,6 +102,11 @@ void crfsuite_item_init(crfsuite_item_t* item)
     memset(item, 0, sizeof(*item));
 }
 
+void crfsuite_restricted_init(crfsuite_restricted_t* restricted_labels)
+{
+    memset(restricted_labels, 0, sizeof(*restricted_labels));
+}
+
 void crfsuite_item_init_n(crfsuite_item_t* item, int num_contents)
 {
     crfsuite_item_init(item);
@@ -116,6 +121,12 @@ void crfsuite_item_finish(crfsuite_item_t* item)
     crfsuite_item_init(item);
 }
 
+void crfsuite_restricted_finish(crfsuite_restricted_t* restricted_labels)
+{
+    free(restricted_labels->labels);
+    crfsuite_restricted_init(restricted_labels);
+}
+
 void crfsuite_item_copy(crfsuite_item_t* dst, const crfsuite_item_t* src)
 {
     int i;
@@ -125,6 +136,17 @@ void crfsuite_item_copy(crfsuite_item_t* dst, const crfsuite_item_t* src)
     dst->contents = (crfsuite_attribute_t*)calloc(dst->num_contents, sizeof(crfsuite_attribute_t));
     for (i = 0;i < dst->num_contents;++i) {
         crfsuite_attribute_copy(&dst->contents[i], &src->contents[i]);
+    }
+}
+
+void crfsuite_restricted_copy(crfsuite_restricted_t* dst, const crfsuite_restricted_t* src)
+{
+    int i;
+    dst->num_labels = src->num_labels;
+    dst->cap_labels = src->cap_labels;
+    dst->labels = (int*)calloc(dst->num_labels, sizeof(int));
+    for (i = 0;i < dst->num_labels;++i) {
+        dst->labels[i] = src->labels[i];
     }
 }
 
@@ -150,6 +172,17 @@ int crfsuite_item_append_attribute(crfsuite_item_t* item, const crfsuite_attribu
     return 0;
 }
 
+int crfsuite_restricted_append_lid(crfsuite_restricted_t* restr_labels, const int lid)
+{
+    if (restr_labels->cap_labels <= restr_labels->num_labels) {
+        restr_labels->cap_labels = (restr_labels->cap_labels + 1) * 2;
+        restr_labels->labels = (int*)realloc(
+            restr_labels->labels, sizeof(int) * restr_labels->cap_labels);
+    }
+    restr_labels->labels[restr_labels->num_labels++] = lid;
+    return 0;
+}
+
 int  crfsuite_item_empty(crfsuite_item_t* item)
 {
     return (item->num_contents == 0);
@@ -171,6 +204,7 @@ void crfsuite_instance_init_n(crfsuite_instance_t* inst, int num_items)
     inst->cap_items = num_items;
     inst->items = (crfsuite_item_t*)calloc(num_items, sizeof(crfsuite_item_t));
     inst->labels = (int*)calloc(num_items, sizeof(int));
+    inst->restricted_labels = (crfsuite_restricted_t*)calloc(num_items, sizeof(crfsuite_restricted_t));
 }
 
 void crfsuite_instance_finish(crfsuite_instance_t* inst)
@@ -179,9 +213,11 @@ void crfsuite_instance_finish(crfsuite_instance_t* inst)
 
     for (i = 0;i < inst->num_items;++i) {
         crfsuite_item_finish(&inst->items[i]);
+        crfsuite_restricted_finish(&inst->restricted_labels[i]);
     }
     free(inst->labels);
     free(inst->items);
+    free(inst->restricted_labels);
     crfsuite_instance_init(inst);
 }
 
@@ -193,10 +229,12 @@ void crfsuite_instance_copy(crfsuite_instance_t* dst, const crfsuite_instance_t*
     dst->cap_items = src->cap_items;
     dst->items = (crfsuite_item_t*)calloc(dst->num_items, sizeof(crfsuite_item_t));
     dst->labels = (int*)calloc(dst->num_items, sizeof(int));
+    dst->restricted_labels = (crfsuite_restricted_t*)calloc(dst->num_items, sizeof(crfsuite_restricted_t));
     dst->weight = src->weight;
     dst->group = src->group;
     for (i = 0;i < dst->num_items;++i) {
         crfsuite_item_copy(&dst->items[i], &src->items[i]);
+        crfsuite_restricted_copy(&dst->restricted_labels[i], &src->restricted_labels[i]);
         dst->labels[i] = src->labels[i];
     }
 }
@@ -208,12 +246,14 @@ void crfsuite_instance_swap(crfsuite_instance_t* x, crfsuite_instance_t* y)
     x->cap_items = y->cap_items;
     x->items = y->items;
     x->labels = y->labels;
+    x->restricted_labels = y->restricted_labels;
     x->weight = y->weight;
     x->group = y->group;
     y->num_items = tmp.num_items;
     y->cap_items = tmp.cap_items;
     y->items = tmp.items;
     y->labels = tmp.labels;
+    y->restricted_labels = tmp.restricted_labels;
     y->weight = tmp.weight;
     y->group = tmp.group;
 }
@@ -224,9 +264,15 @@ int crfsuite_instance_append(crfsuite_instance_t* inst, const crfsuite_item_t* i
         inst->cap_items = (inst->cap_items + 1) * 2;
         inst->items = (crfsuite_item_t*)realloc(inst->items, sizeof(crfsuite_item_t) * inst->cap_items);
         inst->labels = (int*)realloc(inst->labels, sizeof(int) * inst->cap_items);
+        inst->restricted_labels = (crfsuite_restricted_t*)realloc(inst->restricted_labels, sizeof(crfsuite_restricted_t) * inst->cap_items);
     }
     crfsuite_item_copy(&inst->items[inst->num_items], item);
     inst->labels[inst->num_items] = label;
+
+    inst->restricted_labels[inst->num_items].labels = NULL;
+    inst->restricted_labels[inst->num_items].num_labels = 0;
+    inst->restricted_labels[inst->num_items].cap_labels = 0;
+
     ++inst->num_items;
     return 0;
 }

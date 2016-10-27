@@ -59,15 +59,24 @@ typedef struct {
     int level;
 } crf1dt_t;
 
-static void crf1dt_state_score(crf1dt_t *crf1dt, const crfsuite_instance_t *inst)
+typedef struct {
+    crf1dm_t*    crf1dm;
+
+    crfsuite_dictionary_t*    attrs;
+    crfsuite_dictionary_t*    labels;
+    int **lid_to_attr_index;
+} model_internal_t;
+
+static void crf1dt_state_score(crf1dt_t *crf1dt, int **lid_to_attr_index, const crfsuite_instance_t *inst)
 {
-    int a, i, l, t, r, fid;
+    int a, i, l, t, r, r_tmp, fid, attr_num_features;
     crf1dm_feature_t f;
     feature_refs_t attr;
     floatval_t value, *state = NULL;
     crf1dm_t* model = crf1dt->model;
     crf1d_context_t* ctx = crf1dt->ctx;
     const crfsuite_item_t* item = NULL;
+    const crfsuite_restricted_t* restricted_label = NULL;
     const int T = inst->num_items;
     const int L = crf1dt->num_labels;
 
@@ -75,6 +84,7 @@ static void crf1dt_state_score(crf1dt_t *crf1dt, const crfsuite_instance_t *inst
     for (t = 0;t < T;++t) {
         item = &inst->items[t];
         state = STATE_SCORE(ctx, t);
+        restricted_label = &inst->restricted_labels[t];
 
         /* Loop over the contents (attributes) attached to the item. */
         for (i = 0;i < item->num_contents;++i) {
@@ -84,8 +94,22 @@ static void crf1dt_state_score(crf1dt_t *crf1dt, const crfsuite_instance_t *inst
             /* A scale usually represents the atrribute frequency in the item. */
             value = item->contents[i].value;
 
+            if (restricted_label->num_labels == 0) {
+                attr_num_features = attr.num_features;
+            }
+            else {
+                attr_num_features = restricted_label->num_labels;
+            }
+
             /* Loop over the state features associated with the attribute. */
-            for (r = 0;r < attr.num_features;++r) {
+            for (r = 0;r < attr_num_features;++r) {
+                if (restricted_label->num_labels == 0) {
+                    r_tmp = r;
+                }
+                else {
+                    r_tmp = lid_to_attr_index[a][restricted_label->labels[r]];
+                }
+
                 /* The state feature #(attr->fids[r]), which is represented by
                    the attribute #a, outputs the label #(f->dst). */
                 fid = crf1dm_get_featureid(&attr, r);
@@ -191,14 +215,18 @@ static int tagger_release(crfsuite_tagger_t* tagger)
     return count;
 }
 
-static int tagger_set(crfsuite_tagger_t* tagger, crfsuite_instance_t *inst)
+static int tagger_set(crfsuite_tagger_t* tagger, crfsuite_model_t *model, crfsuite_instance_t *inst)
 {
+    int i;
     crf1dt_t* crf1dt = (crf1dt_t*)tagger->internal;
     crf1d_context_t* ctx = crf1dt->ctx;
     crf1dc_set_num_items(ctx, inst->num_items);
     crf1dc_reset(crf1dt->ctx, RF_STATE);
-    crf1dt_state_score(crf1dt, inst);
+    crf1dt_state_score(crf1dt, ((model_internal_t*)model->internal)->lid_to_attr_index, inst);
     crf1dt->level = LEVEL_SET;
+    for (i = 0;i < inst->num_items;++i) {
+        crfsuite_restricted_copy(&ctx->restricted_labels[i], &inst->restricted_labels[i]);
+    }
     return 0;
 }
 
@@ -365,13 +393,6 @@ static void model_labels_free(crfsuite_dictionary_t* dic, const char *str)
  *    This object is instantiated by crf1m_model_create() function.
  */
 
-typedef struct {
-    crf1dm_t*    crf1dm;
-
-    crfsuite_dictionary_t*    attrs;
-    crfsuite_dictionary_t*    labels;
-} model_internal_t;
-
 static int model_addref(crfsuite_model_t* model)
 {
     return crfsuite_interlocked_increment(&model->nref);
@@ -383,6 +404,12 @@ static int model_release(crfsuite_model_t* model)
     if (count == 0) {
         /* This instance is being destroyed. */
         model_internal_t* internal = (model_internal_t*)model->internal;
+        int aid;
+        int num_attrs = crf1dm_get_num_attrs(internal->crf1dm);
+        for (aid = 0;aid < num_attrs;++aid) {
+            free(internal->lid_to_attr_index[aid]);
+        }
+        free(internal->lid_to_attr_index);
         free(internal->labels);
         free(internal->attrs);
         crf1dm_close(internal->crf1dm);
@@ -464,6 +491,9 @@ static int crf1m_model_create(crf1dm_t *crf1dm, void** ptr_model)
     crfsuite_model_t *model = NULL;
     model_internal_t *internal = NULL;
     crfsuite_dictionary_t *attrs = NULL, *labels = NULL;
+    int num_attrs, aid, r, fid, lid_to_attr_index_size;
+    feature_refs_t attr;
+    crf1dm_feature_t f;
 
     *ptr_model = NULL;
 
@@ -522,6 +552,26 @@ static int crf1m_model_create(crf1dm_t *crf1dm, void** ptr_model)
         ret = CRFSUITEERR_OUTOFMEMORY;
         goto error_exit;
     }
+
+    num_attrs = crf1dm_get_num_attrs(crf1dm);
+    internal->lid_to_attr_index = (int **)calloc(num_attrs, sizeof(int*));
+    for (aid = 0;aid < num_attrs;++aid) {
+        crf1dm_get_attrref(crf1dm, aid, &attr);
+        /* Get maximum lable id for current attribute, it is stored in the last element. */
+        fid = crf1dm_get_featureid(&attr, attr.num_features-1);
+        crf1dm_get_feature(crf1dm, fid, &f);
+        lid_to_attr_index_size = f.dst+1;
+        internal->lid_to_attr_index[aid] = (int *)calloc(lid_to_attr_index_size, sizeof(int));
+        /* Loop over the state features associated with the attribute. */
+        for (r = 0;r < attr.num_features;++r) {
+            /* The state feature #(attr->fids[r]), which is represented by
+               the attribute #a, outputs the label #(f->dst). */
+            fid = crf1dm_get_featureid(&attr, r);
+            crf1dm_get_feature(crf1dm, fid, &f);
+            internal->lid_to_attr_index[aid][f.dst] = r;
+        }
+    }
+
     model->internal = internal;
     model->nref = 1;
     model->addref = model_addref;

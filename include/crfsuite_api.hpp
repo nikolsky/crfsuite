@@ -355,22 +355,24 @@ public:
      * Predict the label sequence for the item sequence.
      *  This function calls set() and viterbi() functions to obtain the
      *  label sequence predicted for the item sequence.
-     *  @param  xseq        The item sequence to be tagged.
+     *  @param  xseq                    The item sequence to be tagged.
+     *  @param  restricted_labels       Restricted possible tag set, default argument is empty vector.
      *  @return StringList  The label sequence predicted.
      *  @throw  std::invalid_argument   A model is not opened.
      *  @throw  std::runtime_error      An internal error.
      */
-    StringList tag(const ItemSequence& xseq);
+    StringList tag(const ItemSequence& xseq, const std::vector<StringList>& restricted_labels = {});
 
     /**
      * Set an item sequence.
      *  This function sets an item sequence for future calls for
      *  viterbi(), probability(), and marginal() functions.
-     *  @param  xseq        The item sequence to be tagged    
+     *  @param  xseq                    The item sequence to be tagged.
+     *  @param  restricted_labels       Restricted possible tag set, default argument is empty vector.
      *  @throw  std::invalid_argument   A model is not opened.
      *  @throw  std::runtime_error      An internal error.
      */
-    void set(const ItemSequence& xseq);
+    void set(const ItemSequence& xseq, const std::vector<StringList>& restricted_labels = {});
 
     /**
      * Find the Viterbi label sequence for the item sequence.

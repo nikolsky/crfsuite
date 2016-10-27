@@ -175,6 +175,12 @@ typedef struct {
      */
     floatval_t *mexp_trans;
 
+    /** Array of the restricted label sequence.
+     *  This is a vector used to restrict possible set of tags for each item.
+     *  Used for performance improvement if possible tag set is known.
+     */
+    crfsuite_restricted_t *restricted_labels;
+
 } crf1d_context_t;
 
 #define    MATRIX(p, xl, x, y)        ((p)[(xl) * (y) + (x)])

@@ -148,6 +148,19 @@ typedef struct {
 } crfsuite_item_t;
 
 /**
+ * A restricted label set.
+ * A restricted label set consists of an array of labels.
+ */
+typedef struct {
+    /** Number of restricted labels in the sequence. */
+    int         num_labels;
+    /** Maximum number of restricted labels (internal use). */
+    int         cap_labels;
+    /** Array of the label sequence. */
+    int         *labels;
+} crfsuite_restricted_t;
+
+/**
  * An instance (sequence of items and labels).
  *  An instance consists of a sequence of items and labels.
  */
@@ -160,6 +173,8 @@ typedef struct {
     crfsuite_item_t  *items;
     /** Array of the label sequence. */
     int         *labels;
+    /** Array of the restricted label sequence. **/
+    crfsuite_restricted_t *restricted_labels;
     /** Instance weight. */
     floatval_t  weight;
     /** Group ID of the instance. */
@@ -418,10 +433,11 @@ struct tag_crfsuite_tagger {
     /**
      * Set an instance to the tagger.
      *  @param  tagger      The pointer to this tagger instance.
+     *  @param  model       The pointer to the model instance.
      *  @param  inst        The item sequence to be tagged.
      *  @return int         The status code.
      */
-    int (*set)(crfsuite_tagger_t* tagger, crfsuite_instance_t *inst);
+    int (*set)(crfsuite_tagger_t* tagger, crfsuite_model_t *model, crfsuite_instance_t *inst);
 
     /**
      * Obtain the number of items in the current instance.
@@ -824,6 +840,12 @@ void crfsuite_attribute_swap(crfsuite_attribute_t* x, crfsuite_attribute_t* y);
 void crfsuite_item_init(crfsuite_item_t* item);
 
 /**
+ * Initialize a restricted label structure.
+ *  @param  item        The pointer to crfsuite_restricted_t.
+ */
+void crfsuite_restricted_init(crfsuite_restricted_t* restricted_labels);
+
+/**
  * Initialize an item structure with the number of attributes.
  *  @param  item        The pointer to crfsuite_item_t.
  *  @param  num_attributes  The number of attributes.
@@ -837,11 +859,24 @@ void crfsuite_item_init_n(crfsuite_item_t* item, int num_attributes);
 void crfsuite_item_finish(crfsuite_item_t* item);
 
 /**
+ * Uninitialize an item structure.
+ *  @param  item        The pointer to crfsuite_item_t.
+ */
+void crfsuite_restricted_finish(crfsuite_restricted_t* restricted_labels);
+
+/**
  * Copy the content of an item structure.
  *  @param  dst         The pointer to the destination.
  *  @param  src         The pointer to the source.
  */
 void crfsuite_item_copy(crfsuite_item_t* dst, const crfsuite_item_t* src);
+
+/**
+ * Copy the content of a restricted labels structure.
+ *  @param  dst         The pointer to the destination.
+ *  @param  src         The pointer to the source.
+ */
+void crfsuite_restricted_copy(crfsuite_restricted_t* dst, const crfsuite_restricted_t* src);
 
 /**
  * Swap the contents of two item structures.
@@ -857,6 +892,14 @@ void crfsuite_item_swap(crfsuite_item_t* x, crfsuite_item_t* y);
  *  @return int         \c 0 if successful, \c -1 otherwise.
  */
 int  crfsuite_item_append_attribute(crfsuite_item_t* item, const crfsuite_attribute_t* attr);
+
+/**
+ * Append an attribute to the restricted labels structure.
+ *  @param restr_labels The pointer to crfsuite_restricted_t.
+ *  @param  lid         The label id to be added to the restricted labels.
+ *  @return int         \c 0 if successful, \c -1 otherwise.
+ */
+int crfsuite_restricted_append_lid(crfsuite_restricted_t* restr_labels, const int lid);
 
 /**
  * Check whether the item has no attribute.

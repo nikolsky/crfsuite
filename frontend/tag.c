@@ -333,7 +333,7 @@ static int tag(tagger_option_t* opt, crfsuite_model_t* model)
                 int *output = calloc(sizeof(int), inst.num_items);
 
                 /* Set the instance to the tagger. */
-                if ((ret = tagger->set(tagger, &inst))) {
+                if ((ret = tagger->set(tagger, model, &inst))) {
                     goto force_exit;
                 }
 

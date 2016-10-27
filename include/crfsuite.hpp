@@ -360,18 +360,19 @@ StringList Tagger::labels()
     return lseq;
 }
 
-StringList Tagger::tag(const ItemSequence& xseq)
+StringList Tagger::tag(const ItemSequence& xseq, const std::vector<StringList>& restricted_labels /* = {} */)
 {
-    set(xseq);
+    set(xseq, restricted_labels);
     return viterbi();
 }
 
-void Tagger::set(const ItemSequence& xseq)
+void Tagger::set(const ItemSequence& xseq, const std::vector<StringList>& restricted_labels /* = {} */)
 {
     int ret;
     StringList yseq;
     crfsuite_instance_t _inst;
     crfsuite_dictionary_t *attrs = NULL;
+    crfsuite_dictionary_t *labels = NULL;
 
     if (model == NULL || tagger == NULL) {
         throw std::invalid_argument("The tagger is not opened");
@@ -382,11 +383,40 @@ void Tagger::set(const ItemSequence& xseq)
         throw std::runtime_error("Failed to obtain the dictionary interface for attributes");
     }
 
+    bool ignore_restricted_labels = false;
+    if (restricted_labels.empty()) {
+        ignore_restricted_labels = true;
+    }
+    else if (restricted_labels.size() != xseq.size()) {
+        ignore_restricted_labels = true;
+        std::cout << "Warning: xseq and restricted_labels have different sizes, ignore restricted_labels" << std::endl;
+    }
+
     // Build an instance.
     crfsuite_instance_init_n(&_inst, xseq.size());
     for (size_t t = 0;t < xseq.size();++t) {
         const Item& item = xseq[t];
         crfsuite_item_t* _item = &_inst.items[t];
+        crfsuite_restricted_t* _restricted_label = &_inst.restricted_labels[t];
+
+        // Obtain the dictionary interface representing the labels in the model.
+        if ((ret = model->get_labels(model, &labels))) {
+            throw std::runtime_error("Failed to obtain the dictionary interface for labels");
+        }
+
+        crfsuite_restricted_init(_restricted_label);
+        if (!ignore_restricted_labels) {
+            if (!restricted_labels[t].empty()) {
+                const StringList& restricted_label = restricted_labels[t];
+                for (size_t i = 0;i < restricted_label.size();++i) {
+                    int lid = labels->to_id(labels, restricted_label[i].c_str());
+                    if (0 <= lid) {
+                        crfsuite_restricted_append_lid(_restricted_label, lid);
+                    }
+                }
+                labels->release(labels);
+            }
+        }
 
         // Set the attributes in the item.
         crfsuite_item_init(_item);
@@ -401,7 +431,7 @@ void Tagger::set(const ItemSequence& xseq)
     }
 
     // Set the instance to the tagger.
-    if ((ret = tagger->set(tagger, &_inst))) {
+    if ((ret = tagger->set(tagger, model, &_inst))) {
         crfsuite_instance_finish(&_inst);
         attrs->release(attrs);
         throw std::runtime_error("Failed to set the instance to the tagger.");
