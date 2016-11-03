@@ -162,6 +162,7 @@ void crf1dc_delete(crf1d_context_t* ctx)
 
 void crf1dc_reset(crf1d_context_t* ctx, int flag)
 {
+    int i;
     const int T = ctx->num_items;
     const int L = ctx->num_labels;
 
@@ -176,6 +177,10 @@ void crf1dc_reset(crf1d_context_t* ctx, int flag)
         veczero(ctx->mexp_state, T*L);
         veczero(ctx->mexp_trans, L*L);
         ctx->log_norm = 0;
+    }
+
+    for (i = 0;i < ctx->num_items;++i) {
+        crfsuite_restricted_finish(&ctx->restricted_labels[i]);
     }
 }
 
