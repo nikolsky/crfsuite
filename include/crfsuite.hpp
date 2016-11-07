@@ -414,6 +414,7 @@ void Tagger::set(const ItemSequence& xseq, const std::vector<StringList>& restri
                         crfsuite_restricted_append_lid(_restricted_label, lid);
                     }
                 }
+                labels->release(labels);
             }
         }
 
@@ -433,13 +434,11 @@ void Tagger::set(const ItemSequence& xseq, const std::vector<StringList>& restri
     if ((ret = tagger->set(tagger, &_inst))) {
         crfsuite_instance_finish(&_inst);
         attrs->release(attrs);
-        labels->release(labels);
         throw std::runtime_error("Failed to set the instance to the tagger.");
     }
 
     crfsuite_instance_finish(&_inst);
     attrs->release(attrs);
-    labels->release(labels);
 }
 
 StringList Tagger::viterbi()
