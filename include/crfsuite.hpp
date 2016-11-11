@@ -266,6 +266,7 @@ int Trainer::__logging_callback(void *instance, const char *format, va_list args
 }
 
 
+std::map<std::string, crfsuite_model_t *> Tagger::shared_models;
 
 Tagger::Tagger()
 {
@@ -285,9 +286,17 @@ bool Tagger::open(const std::string& name)
     // Close the model if it is already opened.
     this->close();
 
-    // Open the model file.
-    if ((ret = crfsuite_create_instance_from_file(name.c_str(), (void**)&model))) {
-        return false;
+    auto it = shared_models.find(name);
+    if (it != shared_models.end()) {
+        model = it->second;
+        model->addref(model);
+    }
+    else {
+        // Open the model file.
+        if ((ret = crfsuite_create_instance_from_file(name.c_str(), (void**)&model))) {
+            return false;
+        }
+        shared_models[name] = model;
     }
 
     // Obtain the tagger interface.
@@ -326,6 +335,14 @@ void Tagger::close()
     }
     if (model != NULL) {
         model->release(model);
+        if (model->nref == 0) {
+            for (auto it = shared_models.begin(); it != shared_models.end(); ++it) {
+                if (it->second == model) {
+                    shared_models.erase(it);
+                    break;
+                }
+            }
+        }
         model = NULL;
     }
 }
