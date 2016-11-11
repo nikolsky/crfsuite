@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <vector>
 #include <cstdarg>
+#include <map>
 
 #ifndef __CRFSUITE_H__
 
@@ -304,6 +305,7 @@ class Tagger
 protected:
     crfsuite_model_t *model;
     crfsuite_tagger_t *tagger;
+    static std::map <std::string, crfsuite_model_t *> shared_models;
 
 public:
     /**
