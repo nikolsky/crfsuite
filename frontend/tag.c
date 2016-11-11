@@ -337,8 +337,9 @@ static int tag(tagger_option_t* opt, crfsuite_model_t* model)
                     goto force_exit;
                 }
 
+                double b, g;
                 /* Obtain the viterbi label sequence. */
-                if ((ret = tagger->viterbi(tagger, output, &score))) {
+                if ((ret = tagger->viterbi(tagger, output, &score, &b, &g))) {
                     goto force_exit;
                 }
 

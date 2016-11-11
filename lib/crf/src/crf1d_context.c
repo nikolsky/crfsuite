@@ -45,7 +45,7 @@
 
 #include "crf1d.h"
 #include "vecmath.h"
-
+#include <time.h>
 
 
 crf1d_context_t* crf1dc_new(int flag, int L, int T)
@@ -481,7 +481,7 @@ floatval_t crf1dc_lognorm(crf1d_context_t* ctx)
     return ctx->log_norm;
 }
 
-floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
+floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels, double *bad_time, double *good_time)
 {
     int i, j, i_tmp, j_tmp, t, l, L_size_i, L_size_j;
     int *back = NULL;
@@ -491,6 +491,7 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
     const int L = ctx->num_labels;
     crfsuite_restricted_t *restricted_labels = ctx->restricted_labels;
 
+    struct timespec start, finish;
     /*
         This function assumes state and trans scores to be in the logarithm domain.
      */
@@ -498,7 +499,7 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
     /* Compute the scores at (0, *). */
     cur = ALPHA_SCORE(ctx, 0);
     state = STATE_SCORE(ctx, 0);
-
+    clock_gettime(CLOCK_MONOTONIC, &start);
     if (restricted_labels[0].num_labels == 0) {
         L_size_j = L;
     }
@@ -515,10 +516,17 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
         }
         cur[j_tmp] = state[j_tmp];
     }
-
-
+    clock_gettime(CLOCK_MONOTONIC, &finish);
+    if (restricted_labels[0].num_labels == 0) {
+        *bad_time += (finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+    }
+    else {
+        *good_time += (finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+    }
+    
     /* Compute the scores at (t, *). */
     for (t = 1;t < T;++t) {
+        clock_gettime(CLOCK_MONOTONIC, &start);
         if (restricted_labels[t].num_labels == 0) {
             L_size_j = L;
         }
@@ -567,6 +575,13 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
             /* Add the state score on (t, j). */
             cur[j_tmp] = max_score + state[j_tmp];
         }
+        clock_gettime(CLOCK_MONOTONIC, &finish);
+        if (restricted_labels[t].num_labels == 0) {
+            *bad_time += (finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+        }
+        else {
+            *good_time += (finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+        }
     }
 
     /* Find the node (#T, #i) that reaches EOS with the maximum score. */
@@ -575,6 +590,7 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
     /* Set a score for T-1 to be overwritten later. Just in case we don't
        end up with something beating -FLOAT_MAX. */
 
+    clock_gettime(CLOCK_MONOTONIC, &start);
     if (restricted_labels[T-1].num_labels == 0) {
         L_size_i = L;
     }
@@ -596,7 +612,13 @@ floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels)
             labels[T-1] = i_tmp;        /* Tag the item #T. */
         }
     }
-
+    clock_gettime(CLOCK_MONOTONIC, &finish);
+    if (restricted_labels[T-1].num_labels == 0) {
+        *bad_time += (finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+    }
+    else {
+        *good_time += (finish.tv_sec - start.tv_sec) + (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+    }
 
     /* Tag labels by tracing the backward links. */
     for (t = T-2;0 <= t;--t) {

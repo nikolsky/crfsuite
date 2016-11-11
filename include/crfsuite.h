@@ -457,7 +457,7 @@ struct tag_crfsuite_tagger {
      *                      score of the Viterbi label sequence.
      *  @return int         The status code.
      */
-    int (*viterbi)(crfsuite_tagger_t* tagger, int *labels, floatval_t *ptr_score);
+    int (*viterbi)(crfsuite_tagger_t* tagger, int *labels, floatval_t *ptr_score, double *bad, double *good);
 
     /**
      * Compute the score of a label sequence.

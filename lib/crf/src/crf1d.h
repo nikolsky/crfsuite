@@ -217,7 +217,7 @@ floatval_t crf1dc_marginal_point(crf1d_context_t *ctx, int l, int t);
 floatval_t crf1dc_marginal_path(crf1d_context_t *ctx, const int *path, int begin, int end);
 floatval_t crf1dc_score(crf1d_context_t* ctx, const int *labels);
 floatval_t crf1dc_lognorm(crf1d_context_t* ctx);
-floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels);
+floatval_t crf1dc_viterbi(crf1d_context_t* ctx, int *labels, double *bad_time, double *good_time);
 void crf1dc_debug_context(FILE *fp);
 
 /** @} */

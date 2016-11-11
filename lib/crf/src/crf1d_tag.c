@@ -213,13 +213,13 @@ static int tagger_length(crfsuite_tagger_t* tagger)
     return ctx->num_items;
 }
 
-static int tagger_viterbi(crfsuite_tagger_t* tagger, int *labels, floatval_t *ptr_score)
+static int tagger_viterbi(crfsuite_tagger_t* tagger, int *labels, floatval_t *ptr_score, double *bad_time, double *good_time)
 {
     floatval_t score;
     crf1dt_t* crf1dt = (crf1dt_t*)tagger->internal;
     crf1d_context_t* ctx = crf1dt->ctx;
 
-    score = crf1dc_viterbi(ctx, labels);
+    score = crf1dc_viterbi(ctx, labels, bad_time, good_time);
     if (ptr_score != NULL) {
         *ptr_score = score;
     }

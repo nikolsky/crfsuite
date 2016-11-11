@@ -897,7 +897,8 @@ static int encoder_viterbi(encoder_t *self, int *path, floatval_t *ptr_score)
     int i;
     floatval_t score;
     crf1de_t *crf1de = (crf1de_t*)self->internal;
-    score = crf1dc_viterbi(crf1de->ctx, path);
+    double bad, good;
+    score = crf1dc_viterbi(crf1de->ctx, path, &bad, &good);
     if (ptr_score != NULL) {
         *ptr_score = score;
     }

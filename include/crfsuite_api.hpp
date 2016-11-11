@@ -308,6 +308,8 @@ protected:
     static std::map <std::string, crfsuite_model_t *> shared_models;
 
 public:
+    double bad_time;
+    double good_time;
     /**
      * Construct a tagger.
      */
@@ -400,6 +402,7 @@ public:
      *  @throw  std::runtime_error      An internal error.
      */
     double marginal(const std::string& y, const int t);
+    void print_viterbi();
 };
 
 /**

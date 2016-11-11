@@ -272,11 +272,18 @@ Tagger::Tagger()
 {
     model = NULL;
     tagger = NULL;
+    bad_time = 0;
+    good_time = 0;
 }
 
 Tagger::~Tagger()
 {
     this->close();
+}
+
+void Tagger::print_viterbi()
+{
+    std::cout << "Viterbi slow time: " << bad_time << ", viterbi fast time: " << good_time << std::endl;
 }
 
 bool Tagger::open(const std::string& name)
@@ -482,7 +489,7 @@ StringList Tagger::viterbi()
     // Run the Viterbi algorithm.
     floatval_t score;
     int *path = new int[T];
-    if ((ret = tagger->viterbi(tagger, path, &score))) {
+    if ((ret = tagger->viterbi(tagger, path, &score, &bad_time, &good_time))) {
         delete[] path;
         labels->release(labels);
         throw std::runtime_error("Failed to find the Viterbi path.");

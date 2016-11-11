@@ -147,6 +147,33 @@ static int read_uint32(const uint8_t* buffer, uint32_t* value)
     return sizeof(*value);
 }
 
+static int read_uint32_new(const uint8_t* buffer, uint32_t* value)
+{
+   
+/*
+    *value  = ((uint32_t)buffer[0]);
+    *value |= ((uint32_t)buffer[1] << 8);
+    *value |= ((uint32_t)buffer[2] << 16);
+    *value |= ((uint32_t)buffer[3] << 24);
+*/
+    
+    //printf("old %d\n", *value);
+    //uint8_t* buffer1 = ( uint8_t*)value;
+    
+//    buffer1[3] = buffer[3];
+//    buffer1[2] = buffer[2];
+//    buffer1[1] = buffer[1];
+//    buffer1[0] = buffer[0];
+    
+    
+    //*value = *((uint32_t*)buffer);
+    
+    memcpy(value, buffer, sizeof(uint32_t));
+    //printf("new %d\n", *value);
+    
+    return sizeof(*value);
+}
+
 static int write_uint8_array(FILE *fp, uint8_t *array, size_t n)
 {
     size_t i;
